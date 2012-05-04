@@ -1,27 +1,6 @@
 require 'spec_helper'
 include Brassbound
 
-class Wedding
-  include Context
-
-  def initialize(husband_first_name, husband_last_name,
-                 wife_first_name, wife_last_name)
-    @husband = Person.new(husband_first_name, husband_last_name)
-    @wife = Person.new(wife_first_name, wife_last_name)
-  end
-
-  def execute
-    mark = Person.new('Mark', 'Schlafman')
-    role MinisterRole, mark
-    with_roles(WifeRole => @wife, HusbandRole => @husband) do
-      @husband.marry(@wife)
-      @wife.marry(@husband)
-    end
-    puts("#{@wife.first_name}'s new last name is #{@wife.last_name}")
-    mark.marry(@husband, @wife)
-  end
-end
-
 describe Context do
   include Context
 
@@ -47,7 +26,7 @@ describe Context do
 
   module MinisterRole
     def marry(husband, wife)
-      puts("I, #{first_name} #{last_name}, now pronounce you Mr. and Mrs. #{wife.last_name}")
+      "I, #{first_name} #{last_name}, now pronounce you Mr. and Mrs. #{wife.last_name}"
     end
   end
 
@@ -119,6 +98,15 @@ describe Context do
       jason.should be_kind_of(HusbandRole)
       jennifer.should be_kind_of(WifeRole)
       mark.should be_kind_of(MinisterRole)
+    end
+  end
+
+  it "should allow roles to inject behavior into objects" do
+    with_roles(MinisterRole => mark, HusbandRole => jason, WifeRole => jennifer) do
+      jennifer.marry(jason)
+      jennifer.last_name.should == 'Voegele'
+      mark.marry(jason, jennifer).should ==
+        "I, Mark Schlafman, now pronounce you Mr. and Mrs. Voegele"
     end
   end
 end
