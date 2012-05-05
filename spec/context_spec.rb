@@ -1,112 +1,90 @@
 require 'spec_helper'
 include Brassbound
 
+class Account
+  def self.find(account_id)
+    case account_id
+    when 1
+      Account.new(200)
+    when 2
+      Account.new(100)
+    end
+  end
+
+  attr_accessor :balance
+
+  def initialize(balance)
+    @balance = balance
+  end
+end
+
+module MoneySource
+  def transfer_out(amount)
+    self.balance -= amount
+    context.dest_account.transfer_in(amount)
+  end
+end
+
+module MoneySink
+  def transfer_in(amount)
+    self.balance += amount
+  end
+end
+
+class TransferFunds
+  include Context
+
+  def initialize(source_account_id, dest_account_id, amount)
+    @source_account_id = source_account_id
+    @dest_account_id = dest_account_id
+    @amount = amount
+
+    role :source_account, MoneySource, Account.find(@source_account_id)
+    role :dest_account, MoneySink, Account.find(@dest_account_id)
+  end
+
+  def execute
+    source_account.transfer_out(@amount)
+    # Allow spec to access the executing context for testing
+    yield self if block_given?
+  end
+end
+
 describe Context do
   include Context
 
-  class Person
-    attr_accessor :first_name, :last_name
+  let(:source_account_id) { 1 }
+  let(:dest_account_id) { 2 }
+  let(:source_account) { Account.find(source_account_id) }
+  let(:dest_account) { Account.find(dest_account_id) }
 
-    def initialize(first_name, last_name)
-      @first_name = first_name
-      @last_name = last_name
-    end
-  end
-
-  module WifeRole
-    def marry(husband)
-      self.last_name = husband.last_name
-    end
-  end
-
-  module HusbandRole
-    def marry(wife)
-    end
-  end
-
-  module MinisterRole
-    def marry(husband, wife)
-      "I, #{first_name} #{last_name}, now pronounce you Mr. and Mrs. #{wife.last_name}"
-    end
-  end
-
-  let(:jason) { Person.new('Jason', 'Voegele') }
-  let(:jennifer) { Person.new('Jennifer', 'Bollinger') }
-  let(:mark) { Person.new('Mark', 'Schlafman') }
+  let(:transfer_funds_context) {
+    TransferFunds.new(source_account_id, dest_account_id, 50)
+  }
 
   context "#role" do
-    it "should extend objects with role modules" do
-      for person in [jason, jennifer, mark]
-        person.should_not be_kind_of(HusbandRole)
-        person.should_not be_kind_of(WifeRole)
-        person.should_not be_kind_of(MinisterRole)
-        person.should_not respond_to(:marry)
-      end
+    it "declares a role mapping" do
+      role MoneySource, source_account
+      mapping = roles[:money_source]
+      mapping.role_module.should == MoneySource
+      mapping.data_object.should == source_account
 
-      role HusbandRole, jason
-      role WifeRole, jennifer
-      role MinisterRole, mark
-
-      jason.should be_kind_of(HusbandRole)
-      jennifer.should be_kind_of(WifeRole)
-      mark.should be_kind_of(MinisterRole)
-
-      for person in [jason, jennifer, mark]
-        person.should respond_to(:marry)
-      end
+      role :money_sink, MoneySink, dest_account
+      mapping = roles[:money_sink]
+      mapping.role_module.should == MoneySink
+      mapping.data_object.should == dest_account
     end
   end
 
-  context "#undef_role" do
-    it "should undefine methods but unfortunately cannot unextend the role module" do
-      jason.should_not be_kind_of(HusbandRole)
-      jason.should_not respond_to(:marry)
-
-      role HusbandRole, jason
-      jason.should be_kind_of(HusbandRole)
-      jason.should respond_to(:marry)
-
-      undef_role HusbandRole, jason
-      jason.should_not respond_to(:marry)
-      jason.should be_kind_of(HusbandRole)  # Not the desired situation, but limitation of Ruby
-    end
-  end
-
-  context "#with_roles" do
-    it "should associate objects with roles only for the scope of the given block" do
-      for person in [jason, jennifer, mark]
-        person.should_not be_kind_of(HusbandRole)
-        person.should_not be_kind_of(WifeRole)
-        person.should_not be_kind_of(MinisterRole)
-        person.should_not respond_to(:marry)
+  context "#call" do
+    it "binds all roles to their mapped objects" do
+      transfer_funds_context.call do |ctx|
+        ctx.source_account.should == source_account
+        ctx.source_account.should be_kind_of(MoneySource)
+        ctx.dest_account.should == dest_account
+        ctx.dest_account.should be_kind_of(MoneySink)
       end
-
-      with_roles(HusbandRole => jason, WifeRole => jennifer, MinisterRole => mark) do
-        jason.should be_kind_of(HusbandRole)
-        jennifer.should be_kind_of(WifeRole)
-        mark.should be_kind_of(MinisterRole)
-
-        for person in [jason, jennifer, mark]
-          person.should respond_to(:marry)
-        end
-      end
-
-      for person in [jason, jennifer, mark]
-        person.should_not respond_to(:marry)
-      end
-      # The should be_kind_of assertions below are due to Ruby limitation.
-      jason.should be_kind_of(HusbandRole)
-      jennifer.should be_kind_of(WifeRole)
-      mark.should be_kind_of(MinisterRole)
-    end
-  end
-
-  it "should allow roles to inject behavior into objects" do
-    with_roles(MinisterRole => mark, HusbandRole => jason, WifeRole => jennifer) do
-      jennifer.marry(jason)
-      jennifer.last_name.should == 'Voegele'
-      mark.marry(jason, jennifer).should ==
-        "I, Mark Schlafman, now pronounce you Mr. and Mrs. Voegele"
     end
   end
 end
+
