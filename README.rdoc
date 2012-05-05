@@ -1,0 +1,55 @@
+= Brassbound
+
+Brassbound is a simple but strict implementation of the Data, Context, and Interaction (DCI) paradigm for Ruby.
+
+= Example
+
+The canonical DCI example is the transfer of funds between a money source
+and money sink. In this example, source and sink are both roles
+that are attached to data objects, and the transfer of funds is orchestrated
+by the context. Here's how the example looks using Brassbound.
+
+  class Account
+    attr_reader   :id
+    attr_accessor :balance
+
+    def Account.find_by_id(account_id)
+      # ...
+    end
+  end
+
+  # Implementation of the MoneySource role. Note that roles automatically have
+  # access to the invoking context.
+  module MoneySource
+    def transfer_out(amount)
+      self.balance -= amount
+      context.money_sink.transfer_in(amount)
+    end
+  end
+
+  module MoneySink
+    def transfer_in(amount)
+      self.balance += amount
+    end
+  end
+
+  class TransferFunds
+    include Brassbound::Context
+
+    def initialize(amount, source_account_id, dest_account_id)
+      @amount = amount
+      @source_account = Account.find_by_id(source_account_id)
+      @destination_account = Account.find_by_id(dest_account_id)
+
+      role :money_source, MoneySource, @source_account
+      role :money_sink, MoneySink, @destination_account
+    end
+
+    def execute
+      # Once the role mapping has been established, "money_source" is
+      # equivalent to "@source_account".
+      money_source.transfer_out(@amount)
+    end
+  end
+
+
