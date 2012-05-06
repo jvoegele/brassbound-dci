@@ -30,11 +30,11 @@ module Brassbound::Context
 
   require 'brassbound/util'
 
+  # The currently executing context. Stored as a thread-local variable, so
+  # each thread can have its own current context.
   def self.current
     Thread.current[:brassbound_context]
   end
-
-  RoleMapping = Struct.new(:role_module, :data_object)
 
   # A Hash containing all of the declared role mappings for this context.
   # The keys of the Hash are the declared role names, while the values
@@ -160,4 +160,8 @@ module Brassbound::Context
       Thread.current[:brassbound_context] = old_context
     end
   end
+
+private
+
+  RoleMapping = Struct.new(:role_module, :data_object)
 end
