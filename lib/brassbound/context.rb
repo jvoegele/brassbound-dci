@@ -149,19 +149,25 @@ module Brassbound::Context
   # After the #execute method has returned, it will unapply all role mappings
   # and set the current context back to its previous value.
   def call(*args)
+    in_context do
+      self.execute(*args)
+    end
+  end
+
+private
+
+  def in_context(&block)
     old_context = ::Brassbound::Context.current
     Thread.current[:brassbound_context] = self
 
     roles.each_key(&method(:apply_role))
     begin
-      self.execute(*args)
+      block.call
     ensure
       roles.each_key(&method(:unapply_role))
       Thread.current[:brassbound_context] = old_context
     end
   end
-
-private
 
   RoleMapping = Struct.new(:role_module, :data_object)
 end
