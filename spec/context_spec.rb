@@ -86,5 +86,12 @@ describe Context do
       end
     end
   end
+
+  it "removes all bindings after execution" do
+    role MoneySource, source_account
+    role MoneySink, source_account # yes, that is intentional
+    in_context do 'nothing' end
+    source_account.should_not respond_to(:context)
+  end
 end
 

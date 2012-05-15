@@ -121,12 +121,10 @@ module Brassbound::Context
     role_mapping = self.roles[role_name]
     role_module, obj = role_mapping.role_module, role_mapping.data_object
     obj.instance_variable_set(:@__brassbound_context, nil)
-    class << obj
-      remove_method(:context)
-    end
     role_module.instance_methods.each do |m|
       obj.singleton_class.send(:undef_method, m)
     end
+    obj.singleton_class.send(:undef_method, :context) if obj.respond_to?(:context)
     self.singleton_class.send(:undef_method, role_name)
   end
 
